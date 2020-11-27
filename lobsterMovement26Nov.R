@@ -5,10 +5,10 @@ library(reshape2)
 # A function to get the distance of each lobster from the trap
 # By default the trap is at (5,5)
 # The function needs the x and y coordinate of the lobster
-
-distanceToTrapCalculator<- function(xLobster, yLobster){
+# adding trap location makes it generic
+distanceToTrapCalculator<- function(xLobster, yLobster,xtrap=5, ytrap=5){
   
-    distanceToTrap<- sqrt((xLobster - 5)^2 + (yLobster -5)^2)
+    distanceToTrap<- sqrt((xLobster - xtrap)^2 + (yLobster -ytrap)^2)
     return(distanceToTrap)
 }
 
@@ -19,10 +19,11 @@ distanceToTrapCalculator<- function(xLobster, yLobster){
 randomMove<- function(xLobster, yLobster, dStep){
   
     randomAngle<- runif(n=1, min = 0, max=360) #selects a random angle of direction 
-    xNew<- dStep * cos(randomAngle * pi / 180) + xLobster #moves dStep based on the angle
-    yNew<- dStep * sin(randomAngle * pi / 180) + yLobster
+    xNew<- dStep * sin(randomAngle * pi / 180) + xLobster #moves dStep based on the angle
+    yNew<- dStep * cos(randomAngle * pi / 180) + yLobster
     
     # Check if the lobster is located outside of the grid
+    # I think its ok for them to move outside the grid, so might not be necessary to have this step
     if(xNew < 0 ){
       xNew <- 0
     }
@@ -44,9 +45,11 @@ randomMove<- function(xLobster, yLobster, dStep){
 # The function needs the current x and y coordinate of lobster + dStep + distance of the lobster from the bait 
 #to determine if the condition for directionalMove is met
 
-directionalMove<- function(xLobster, yLobster, dStep, distanceToTrap){
+directionalMove<- function(xLobster, yLobster, dStep, distanceToTrap, xtrap=5, ytrap=5,radius_of_influence=15,ZoI=0){
   # Calculating tethaT, !!!!!!!! the concept of angle to trap (ask Adam!)
   #it looks like the quadrant of lobster matters here?
+  #AMC - it shouldn't matter, I would just use the bearing function from geosphere package to get thetaT
+  
   if (xLobster < 5){  # for lobsters in 2nd and 3rd quarter
     degree<- (5 - xLobster)/ distanceToTrap
     tethaT<- acos(( (degree * pi) / 180 ) )
@@ -57,20 +60,33 @@ directionalMove<- function(xLobster, yLobster, dStep, distanceToTrap){
   }
   
   # Calculating tethaR
-  b <- 0.1 + (0.9 * distanceToTrap) / 15 #Radius of influence
+  b <- 0.1 + (0.9 * distanceToTrap) / radius_of_influence #Radius of influence
   if( b > 1){
     b < - 1
   }
   
   u          <- runif( n = 1, min = 0, max = 1 )
   sign       <- sample( c(1,-1), size = 1, replace = TRUE)
-  tethaR     <- sign * 180 * u^(1/b)  
-  tetha      <- tethaT + tethaR
+  tethaR     <- sign * 180 * u^(1/b)  ##AMC I think we need to talk about thetaR, this is not how I interpreted the paper
   
-  xNew   <- dStep * cos(tetha * pi / 180) + xLobster
-  yNew   <- dStep * sin(tetha * pi / 180) + yLobster
+  AMCthetaR =F
+  if(AMCthetaR){
+    #ZoI is adjusted each time step for decay (shrinkage) of radius of influence (equation 3)
+    b = 1 + 0.9 * (distanceToTrap - ZoI) / radius_of_influence
+    theta_R = -180:180
+    P = 1/(180^b) * abs(tethaT) ^ b
+    Prtheta_R = (1-P) / sum(1-P)
+    theta_r = sample(theta_R,size = 1, prob=Prtheta_R)  
+  }
+  
+  
+   tetha      <- tethaT + tethaR
+  
+  xNew   <- dStep * sin(tetha * pi / 180) + xLobster
+  yNew   <- dStep * cos(tetha * pi / 180) + yLobster
   
   # Check if the lobster is going to be outside of the grid
+  #AMC again I think its ok for lobsters to move outside grid
   if(xNew < 0 ){
     xNew <- 0
   }
@@ -172,9 +188,11 @@ while (random_point_count < random_point_sample_number){
   random_point_count=random_point_count+1
 }
 
+#AMC need to include the catching process
+
 initialxyCoordinate <- random_points
 coordinatesOverTime <- list()
-coordinatesOverTime[[1]] <- initialxyCoordinate
+coordinatesOverTime[[1]] <- initialxyCoordinate #AMC not sure why this and not the output of simulated_raster
 for(t in 2:100){
   coordinatesOverTime[[t]] <- updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]] )
   
