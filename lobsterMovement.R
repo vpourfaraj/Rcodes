@@ -204,9 +204,16 @@ for(t in 2:100){
   
 }
 
+#lobsters
 outmove = do.call(rbind,coordinatesOverTime)
 outmove$T = rep(0:99, each=nrow(tt))
 outmove$I = rep(1:nrow(tt), times=100)
+
+#traps
+outtraps = as.data.frame(do.call(rbind, trapCatch))
+outtraps$trapno = rep(ntraps,times=100) #if >1 trap this needs to be 1:ntraps
+
+with(subset(outtraps, trapno==1),plot(1:100, V1, type='l',ylab='Catch', xlab='Time'))
 
 #One lobster
   par( mfrow=c(2,2) ) # create a plot with 1 row and 2 columns to show plots side by side
