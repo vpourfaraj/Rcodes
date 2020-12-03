@@ -8,7 +8,11 @@ library(geosphere)
 # By default the trap is at (5,5)
 # The function needs the x and y coordinate of the lobster
 # adding trap location makes it generic
-distanceToTrapCalculator<- function(xLobster, yLobster,xtrap=5, ytrap=5){
+distanceToTrapCalculator<- function(Lobster,trap = x(5,5)){
+    xLobster = Lobster[1]
+    yLobster = Lobster[2]
+    xtrap = trap[1]
+    ytrap = trap[2]
     distanceToTrap<- sqrt((xLobster - xtrap)^2 + (yLobster -ytrap)^2)
     return(distanceToTrap)
 }
@@ -53,42 +57,7 @@ directionalMove<- function(xLobster, yLobster, dStep, distanceToTrap,
   return( list(EASTING = xNew, NORTHING = yNew) )
   
 }
-# A function to get the coordinate at time t, update the coordinate, 
-#and return the coordinate at time t + 1
-updateGrid    = function(lobsterCoordinates,trapCoordinates, radius_of_influence=15, dstep = 5, currentZoI){
-  
-  # Takes the argument lobsterCoordinates as the x and y coordinates and updates it accordingly
-  numberOfLobsters <- nrow(lobsterCoordinates)
-  xNew <- vector(mode = 'numeric', length = numberOfLobsters)
-  yNew <- vector(mode = 'numeric', length = numberOfLobsters)
-  
-  # Takes the argument trapCoordinates as the x and y coordinates
-  numberOfTraps <- nrow(trapCoordinates)
-  xTrap <- vector(mode = 'numeric', length = numberOfTraps)
-  yTrap <- vector(mode = 'numeric', length = numberOfTraps)
-  
-  # Loops over each lobster and update their coordinate accordingly
-  for( lobsterIndex in 1:numberOfLobsters ){
-    
-    xOld <- lobsterCoordinates[lobsterIndex,1]
-    yOld <- lobsterCoordinates[lobsterIndex,2]
-    distanceToTrap <- distanceToTrapCalculator(xLobster = xOld,yLobster = yOld,xtrap=xTrap, ytrap = yTrap)
-    
-    if( distanceToTrap > radius_of_influence){
-      temp <- randomMove(xLobster = xOld , yLobster = yOld , dStep = dstep)
-      xNew[lobsterIndex] <- temp$EASTING
-      yNew[lobsterIndex] <- temp$NORTHING
-    }else{
-      temp <- directionalMove(xLobster = xOld , yLobster = yOld , distanceToTrap = distanceToTrap, radius_of_influence = radius_of_influence, dStep = dstep, ZoI = currentZoI)
-      xNew[lobsterIndex] <- temp$EASTING
-      yNew[lobsterIndex] <- temp$NORTHING
-    }
-  }
-  
-  updatedGrid <- data.frame(EASTING = xNew, NORTHING = yNew)
-  return(updatedGrid)
-  
-}
+
 
 #### initial coordinate of lobsters is simulated (written by Adam Cook)
 rpoisD<-function (n, lambda,D=1) {
@@ -99,36 +68,107 @@ rpoisD<-function (n, lambda,D=1) {
     rnbinom(n, size=sz, mu=lambda)
   }
 }
+#AMC need to make general if we have multiple traps, so need to id closest trap
+distanceClosestTrap <- function(lob_loc, trap_loc){
+      #trap_loc can be a matrix (n x 2)
+      #lob_loc is an individual lobster
+  ds = unlist(apply(trap_loc,1,distanceToTrapCalculator,lob_loc))
+  dmin = which.min(ds)
+  return(c(distance=ds[dmin], trapid =dmin))
+}
+
 
 
 
 #AMC 
-catchability<- function(q0= 0.5,qmin=0, saturationTreshhold=5, Ct=0 ){
-   r = (log(0.01) - log(q0 - qmin))/- saturationTreshhold
+catchability<- function(q0= 0.5,qmin=0, saturationThreshold=5, Ct=0 ){
+   r = (log(0.01) - log(q0 - qmin))/- saturationThreshold
     qo = (q0-qmin) / exp(r*Ct) + qmin
    return(qo)
  }
 
-#AMC Need to id if trap in path then lobster is caught
-
-
+#AMC Need to see if trap in path then lobster is caught
 trapInPath = function(loc1, loc2, trap_loc,how_close=0.1){
-  x = seq(loc1$EASTING,loc2$EASTING,length.out = 10)
-  y = seq(loc1$NORTHING,loc2$NORTHING,length.out = 10)
+  x = seq(loc1[1],loc2[1],length.out = 10)
+  y = seq(loc1[2],loc2[2],length.out = 10)
   path = data.frame(EASTING=x, NORTHING=y)
-  dB = distanceToTrapCalculator(loc1,trap_loc)
-  cl_trap = trap_loc[dB[3],]
-  ds = unlist(apply(path,1,unitD,x=cl_trap))
-  out = list(NA)
+  ds = unlist(apply(path,1,distanceToTrapCalculator,trap=trap_loc))
   if(any(ds<how_close)) {
     i= min(which(ds<how_close))
-    path = path[i,]
-    out[[1]] = cl_trap
-    out[[2]] = path
-  }
-  return(out)
+    path = c(path[i,1],path[i,2])
+    trapped = 1
+    } else {
+     path = loc2
+     trapped = 0
+    }
+  return(c(path, trapped))
 }
 
+
+
+# A function to get the coordinate at time t, update the coordinate, 
+#and return the coordinate at time t + 1
+updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_of_influence=15, dstep = 5, currentZoI, how_close=0.1, q0=.5, qmin=0, saturationThreshold=5){
+  
+  # Takes the argument lobsterCoordinates as the x and y coordinates and updates it accordingly
+  numberOfLobsters <- nrow(lobsterCoordinates)
+  xNew <- vector(mode = 'numeric', length = numberOfLobsters)
+  yNew <- vector(mode = 'numeric', length = numberOfLobsters)
+  trappedLobster<- vector(mode = 'numeric', length = numberOfLobsters)
+
+  # Loops over each lobster and update their coordinate accordingly
+  for( lobsterIndex in 1:numberOfLobsters ){
+    
+    xOld <- lobsterCoordinates[lobsterIndex,1]
+    yOld <- lobsterCoordinates[lobsterIndex,2]
+    trapped <- lobsterCoordinates[lobsterIndex,3]
+    print(trapped)
+    if(trapped==1){
+      #repeats trap loc for a trapped lobster
+      xNew[lobsterIndex] = xOld
+      yNew[lobsterIndex] = yOld
+      trappedLobster[lobsterIndex] = trapped
+      next()
+    }
+    #AMC this needs to be made generic so that it is distance to closest trap
+   # distanceToTrap <- distanceToTrapCalculator(Lobster = c(xOld, yOld),trap=c(xTrap, yTrap))
+    distanceToTrap = distanceClosestTrap(lob_loc = c(xOld,yOld), trap_loc = trapCoordinates[,c(1,2)] )
+
+    if( distanceToTrap[1] > radius_of_influence){
+      temp <- randomMove(xLobster = xOld , yLobster = yOld , dStep = dstep)
+      xNew[lobsterIndex] <- temp$EASTING
+      yNew[lobsterIndex] <- temp$NORTHING
+      trappedLobster[lobsterIndex] = 0
+    }else{
+      temp <- directionalMove(xLobster = xOld , yLobster = yOld , distanceToTrap = distanceToTrap[1], radius_of_influence = radius_of_influence, dStep = dstep, ZoI = currentZoI)
+      xNew[lobsterIndex] <- temp$EASTING
+      yNew[lobsterIndex] <- temp$NORTHING
+    
+      #AMC now need to check if trap is within path of lobster to be caught, i.e. does the lobster actually interact with the trap along its path from p1 to p2
+      trappedQ = trapInPath(loc1 = c(xOld,yOld), loc2 = c(xNew,yNew), trap_loc = trapCoordinates[distanceToTrap[2],],how_close=how_close)
+      if(trappedQ[3]==1) {
+        
+        #this means the lobster is close enough to be trapped and we need to apply the catchability criteria
+        #But we need to know how many lobsters in the trap at this time using the trapCatch vector (which should be indexed the same as the trapCoordinates)
+        #catchability returns a prob or being caught in the trap given the current catch  
+          pC = catchability(q0= q0,qmin=qmin, saturationThreshold=saturationThreshold, Ct=trapCatch[distanceToTrap[2]] )
+          caught = rbinom(n=1,size=1,prob=pC)
+          if(caught==1){
+            trapCatch[distanceToTrap[2]] =trapCatch[distanceToTrap[2]]+1
+            xNew[lobsterIndex] <- trapCoordinates[distanceToTrap[2],1] 
+            yNew[lobsterIndex] <- trapCoordinates[distanceToTrap[2],2] 
+            trappedLobster[lobsterIndex] = 1
+            }
+          } 
+        }
+      }
+
+  
+  
+  updatedGrid <- data.frame(EASTING = xNew, NORTHING = yNew, trapped = trappedLobster)
+  return(list(updatedGrid, trapCatch))
+  
+}
 
 #density per grid 100 grids
 # each element in the vector represents the starting value in each grid
@@ -141,15 +181,21 @@ tt <- unlist( apply(X = LobsterStart, MARGIN = 1, FUN = replicateCoordinates) )
 tt<- matrix(tt, ncol = 2, byrow = TRUE)
 colnames(tt)<- c("EASTING","NORTHING")
 initialxyCoordinate  = as.data.frame(tt)
+initialxyCoordinate$trapped = 0 # this will update as a lobster gets caught and we don't need to update movements
 coordinatesOverTime <- list()
 coordinatesOverTime[[1]] <- initialxyCoordinate 
 currentZoI<- 1
 s =  0.993
-
+ntraps = 1
+trapCoordinates = data.frame(EASTING=5,NORTHING=5)
+trapCatch = list()
+trapCatch[[1]] = rep(0,length=ntraps)
 
 for(t in 2:100){
-  currentZoI<- currentZoI * s
-  coordinatesOverTime[[t]] <- updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], currentZoI = currentZoI)
+  if(t>2) currentZoI<- currentZoI * s
+  ko = updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], trapCoordinates=trapCoordinates, trapCatch=trapCatch[[t-1]], currentZoI = currentZoI,saturationThreshold=5,how_close=1,dstep=5)
+  coordinatesOverTime[[t]] <- ko[[1]]
+  trapCatch[[t]] <- ko[[2]]
   par( mfrow=c(1,2) ) # create a plot with 1 row and 2 columns to show plots side by side
   plot( coordinatesOverTime[[t-1]], xlim = c(0,10), ylim = c(0,10), main = paste0('Time = ', t-1) )
   points(x = 5, y = 5, col = 'red')
