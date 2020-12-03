@@ -204,5 +204,26 @@ for(t in 2:100){
   
 }
 
+outmove = do.call(rbind,coordinatesOverTime)
+outmove$T = rep(0:99, each=nrow(tt))
+outmove$I = rep(1:nrow(tt), times=100)
+
+#One lobster
+  par( mfrow=c(2,2) ) # create a plot with 1 row and 2 columns to show plots side by side
+
+with(subset(outmove, I==1),plot(EASTING, NORTHING, type='l'))
+points(trapCoordinates, pch=16, col='red')
+with(subset(outmove, I==1), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('Start','End')))
 
 
+with(subset(outmove, I==3),plot(EASTING, NORTHING, type='l'))
+points(trapCoordinates, pch=16, col='red')
+with(subset(outmove, I==3), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('Start','End')))
+
+with(subset(outmove, I==5),plot(EASTING, NORTHING, type='l'))
+points(trapCoordinates, pch=16, col='red')
+with(subset(outmove, I==5), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('Start','End')))
+
+with(subset(outmove, I==7),plot(EASTING, NORTHING, type='l'))
+points(trapCoordinates, pch=16, col='red')
+with(subset(outmove, I==7), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('Start','End')))
