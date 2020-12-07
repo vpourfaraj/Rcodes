@@ -122,7 +122,6 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
     xOld <- lobsterCoordinates[lobsterIndex,1]
     yOld <- lobsterCoordinates[lobsterIndex,2]
     trapped <- lobsterCoordinates[lobsterIndex,3]
-    print(trapped)
     if(trapped==1){
       #repeats trap loc for a trapped lobster
       xNew[lobsterIndex] = xOld
@@ -172,6 +171,8 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
 
 #density per grid 100 grids
 # each element in the vector represents the starting value in each grid
+
+#One iteration 
 initialGrid = rpoisD(n=100,lambda=.1, D = 3)
 LobsterStart = data.frame(EASTING = rep(1:10,times=10), NORTHING = rep(1:10,each=10), Lobs = initialGrid)
 
@@ -234,3 +235,133 @@ with(subset(outmove, I==5), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('S
 with(subset(outmove, I==7),plot(EASTING, NORTHING, type='l'))
 points(trapCoordinates, pch=16, col='red')
 with(subset(outmove, I==7), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('Start','End')))
+
+
+
+
+
+SimulateLobsterMovement <- function(p=p,plot=F) {
+with(p,{
+  
+
+initialGrid = rpoisD(n=ngrids,lambda=initlambda, D = initD)
+LobsterStart = data.frame(EASTING = rep(1:ncolgrids,times=nrowgrids), NORTHING = rep(1:nrowgrids,each=ncolgrids), Lobs = initialGrid)
+
+LobsterStart <- subset(LobsterStart,Lobs>0)
+replicateCoordinates <- function(d){ rep(d[1:2], d[3]) } #replicates coordinates for grids with more than 1 lobster
+tt <- unlist( apply(X = LobsterStart, MARGIN = 1, FUN = replicateCoordinates) )
+tt<- matrix(tt, ncol = 2, byrow = TRUE)
+colnames(tt)<- c("EASTING","NORTHING")
+initialxyCoordinate  = as.data.frame(tt)
+initialxyCoordinate$trapped = 0 # this will update as a lobster gets caught and we don't need to update movements
+coordinatesOverTime <- list()
+coordinatesOverTime[[1]] <- initialxyCoordinate 
+currentZoI<- currentZoIInit
+s =  smult
+ntraps = ntrapsstart
+trapCoordinates = data.frame(EASTING=trapEastStart,NORTHING=trapNorthStart)
+trapCatch = list()
+trapCatch[[1]] = rep(0,length=ntraps)
+
+for(t in 2:niter){
+  if(t>2) currentZoI<- currentZoI * s
+  ko = updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], trapCoordinates=trapCoordinates, trapCatch=trapCatch[[t-1]], currentZoI = currentZoI,saturationThreshold=saturationThresholdStart,how_close=how_closeStart,dstep=dstepstart)
+  coordinatesOverTime[[t]] <- ko[[1]]
+  trapCatch[[t]] <- ko[[2]]
+  if(plot){
+  par( mfrow=c(1,2) ) # create a plot with 1 row and 2 columns to show plots side by side
+  plot( coordinatesOverTime[[t-1]], xlim = c(0,10), ylim = c(0,10), main = paste0('Time = ', t-1) )
+  points(x = 5, y = 5, col = 'red')
+  plot( coordinatesOverTime[[t]],   xlim = c(0,10), ylim = c(0,10), main = paste0('Time = ', t) )
+  points(x = 5, y = 5, col = 'red')
+  }
+}
+
+#lobsters
+outmove = do.call(rbind,coordinatesOverTime)
+outmove$T = rep(0:(niter-1), each=nrow(tt))
+outmove$I = rep(1:nrow(tt), times=niter)
+
+#traps
+outtraps = as.data.frame(do.call(rbind, trapCatch))
+if(ntraps==1) outtraps$trapno = rep(ntraps,times=niter) #if >1 trap this needs to be 1:ntraps
+if(ntraps>1) outtraps$trapno = rep(1:ntraps,times=niter) #if >1 trap this needs to be 1:ntraps
+outputs = list()
+outputs$traps = outtraps
+outputs$lobsters = outmove
+return(outputs)
+  })
+}
+
+
+#Lets run Multiple iterations
+
+#initalize a parameter file to pass info into the code and then put all into a function
+
+p = list()
+p$nrowgrids = 10
+p$ncolgrids = 10
+p$ngrids=p$nrowgrids * p$ncolgrids
+p$initlambda=.1
+p$initD = 3
+p$smult = 0.993
+p$currentZoIInit = 1
+
+p$trapEastStart = 5
+p$trapNorthStart = 5
+p$ntrapsstart = length(p$trapEastStart)
+
+p$saturationThresholdStart = 5
+p$how_closeStart = 1
+p$dstepstart = 5 
+
+p$niter =100
+
+
+
+
+#run the model
+    a = SimulateLobsterMovement(p=p)
+
+      plot(1:p$niter,a$traps[,1],xlab='Time',ylab='N Caught',ylim=c(0,15))
+
+#lets change a parameter
+  p$saturationThresholdStart=10
+
+# rerun
+    b = SimulateLobsterMovement(p=p)
+
+    lines(1:p$niter,b$traps[,1])
+
+#or just run it a bunch of times since the model is stochastic
+p$saturationThresholdStart = 5
+time.to.max=c()
+max.catch = c()
+  realizations = 50
+    plot(1:p$niter,xlab='Time',ylab='N Caught',ylim=c(0,15),type='n')
+
+          for(i in 1:realizations){
+                  a = SimulateLobsterMovement(p=p)
+                   lines(1:p$niter,a$traps[,1])
+                time.to.max = c(time.to.max , which.max(a$traps$V1))
+                max.catch = c(max.catch , max(a$traps$V1))
+                }
+
+hist(time.to.max)
+hist(max.catch)
+
+
+p$saturationThresholdStart = 8
+time.to.max8=c()
+max.catch8 = c()
+  realizations = 50
+    
+          for(i in 1:realizations){
+                  a = SimulateLobsterMovement(p=p)
+                   lines(1:p$niter,a$traps[,1],col='red')
+                time.to.max8 = c(time.to.max8 , which.max(a$traps$V1))
+                max.catch8 = c(max.catch8 , max(a$traps$V1))
+                }
+
+hist(time.to.max8)
+hist(max.catch8)
