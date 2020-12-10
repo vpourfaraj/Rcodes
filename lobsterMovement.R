@@ -288,11 +288,9 @@ for(t in 2:niter){
 outmove = do.call(rbind,coordinatesOverTime)
 outmove$T = rep(0:(niter-1), each=nrow(tt))
 outmove$I = rep(1:nrow(tt), times=niter)
-
+browser()
 #traps
 outtraps = as.data.frame(do.call(rbind, trapCatch))
-if(ntraps==1) outtraps$trapno = rep(ntraps,times=niter) #if >1 trap this needs to be 1:ntraps
-if(ntraps>1) outtraps$trapno = rep(1:ntraps,times=niter) #if >1 trap this needs to be 1:ntraps
 outputs = list()
 outputs$traps = outtraps
 outputs$lobsters = outmove
@@ -314,8 +312,8 @@ p$initD = 3
 p$smult = 0.993
 p$currentZoIInit = 1
 
-p$trapEastStart = 5
-p$trapNorthStart = 5
+p$trapEastStart = c(5,3,4)
+p$trapNorthStart = c(5,3,4)
 p$ntrapsstart = length(p$trapEastStart)
 
 p$saturationThresholdStart = 5
