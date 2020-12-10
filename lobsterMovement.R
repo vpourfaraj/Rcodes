@@ -288,7 +288,6 @@ for(t in 2:niter){
 outmove = do.call(rbind,coordinatesOverTime)
 outmove$T = rep(0:(niter-1), each=nrow(tt))
 outmove$I = rep(1:nrow(tt), times=niter)
-browser()
 #traps
 outtraps = as.data.frame(do.call(rbind, trapCatch))
 outputs = list()
@@ -340,33 +339,46 @@ p$niter =100
 
 #or just run it a bunch of times since the model is stochastic
 p$saturationThresholdStart = 5
-time.to.max=c()
-max.catch = c()
+time.to.max=list()
+max.catch = list()
   realizations = 50
     plot(1:p$niter,xlab='Time',ylab='N Caught',ylim=c(0,15),type='n')
 
           for(i in 1:realizations){
                   a = SimulateLobsterMovement(p=p)
-                   lines(1:p$niter,a$traps[,1])
-                time.to.max = c(time.to.max , which.max(a$traps$V1))
-                max.catch = c(max.catch , max(a$traps$V1))
+                    for(j in 1:ncol(a$traps)){
+                            lines(1:p$niter,a$traps[,j])
+                    }
+                time.to.max[[i]] = apply(a$traps,2, which.max)
+                max.catch[[i]] = apply(a$traps,2,max)
                 }
+time.to.max = do.call(rbind,time.to.max)
+max.catch = do.call(rbind,max.catch)
 
-hist(time.to.max)
-hist(max.catch)
+#calculating dispersion
+    disp = apply(max.catch,1,dispersion)
+    mean(disp)
 
 
+#next trial changing saturation
 p$saturationThresholdStart = 8
 time.to.max8=c()
 max.catch8 = c()
-  realizations = 50
-    
-          for(i in 1:realizations){
-                  a = SimulateLobsterMovement(p=p)
-                   lines(1:p$niter,a$traps[,1],col='red')
-                time.to.max8 = c(time.to.max8 , which.max(a$traps$V1))
-                max.catch8 = c(max.catch8 , max(a$traps$V1))
-                }
+time.to.max8=list()
+max.catch8 = list()
+realizations = 50
 
-hist(time.to.max8)
-hist(max.catch8)
+plot(1:p$niter,xlab='Time',ylab='N Caught',ylim=c(0,15),type='n')
+
+for(i in 1:realizations){
+        a = SimulateLobsterMovement(p=p)
+        for(j in 1:ncol(a$traps)){
+          lines(1:p$niter,a$traps[,j])
+        }
+        time.to.max8[[i]] = apply(a$traps,2, which.max)
+        max.catch8[[i]] = apply(a$traps,2,max)
+}
+time.to.max8 = do.call(rbind,time.to.max8)
+max.catch8 = do.call(rbind,max.catch8)
+
+
