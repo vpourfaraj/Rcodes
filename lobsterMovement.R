@@ -68,6 +68,13 @@ rpoisD<-function (n, lambda,D=1) {
     rnbinom(n, size=sz, mu=lambda)
   }
 }
+
+
+dispersion <- function(x) {
+          var(x) / mean(x)
+}
+
+
 #AMC need to make general if we have multiple traps, so need to id closest trap
 distanceClosestTrap <- function(lob_loc, trap_loc){
       #trap_loc can be a matrix (n x 2)
