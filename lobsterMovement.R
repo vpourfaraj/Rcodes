@@ -115,7 +115,7 @@ trapInPath = function(loc1, loc2, trap_loc,how_close=0.1){
 
 # A function to get the coordinate at time t, update the coordinate, 
 #and return the coordinate at time t + 1
-updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_of_influence=15, dstep = 5, currentZoI, how_close=0.1, q0=.5, qmin=0, saturationThreshold=5){
+updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_of_influence=15, dstep = 5, currentZoI, how_close=0.1, q0=.5, qmin=0, saturationThreshold=5, trapSaturation=T){
   
   # Takes the argument lobsterCoordinates as the x and y coordinates and updates it accordingly
   numberOfLobsters <- nrow(lobsterCoordinates)
@@ -157,7 +157,8 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
         #this means the lobster is close enough to be trapped and we need to apply the catchability criteria
         #But we need to know how many lobsters in the trap at this time using the trapCatch vector (which should be indexed the same as the trapCoordinates)
         #catchability returns a prob or being caught in the trap given the current catch  
-          pC = catchability(q0= q0,qmin=qmin, saturationThreshold=saturationThreshold, Ct=trapCatch[distanceToTrap[2]] )
+         if(trapSaturation) pC = catchability(q0= q0,qmin=qmin, saturationThreshold=saturationThreshold, Ct=trapCatch[distanceToTrap[2]] )
+          if(!trapSaturation) pC = q0
           caught = rbinom(n=1,size=1,prob=pC)
           if(caught==1){
             trapCatch[distanceToTrap[2]] =trapCatch[distanceToTrap[2]]+1
@@ -249,12 +250,14 @@ with(subset(outmove, I==7), text(x=EASTING[c(1,100)], y=NORTHING[c(1,100)], c('S
 
 SimulateLobsterMovement <- function(p=p,plot=F) {
 with(p,{
+outputs = list()
   
 
 initialGrid = rpoisD(n=ngrids,lambda=initlambda, D = initD)
 LobsterStart = data.frame(EASTING = rep(1:ncolgrids,times=nrowgrids), NORTHING = rep(1:nrowgrids,each=ncolgrids), Lobs = initialGrid)
 
 LobsterStart <- subset(LobsterStart,Lobs>0)
+if(nrow(LobsterStart)>0) {
 replicateCoordinates <- function(d){ rep(d[1:2], d[3]) } #replicates coordinates for grids with more than 1 lobster
 tt <- unlist( apply(X = LobsterStart, MARGIN = 1, FUN = replicateCoordinates) )
 tt<- matrix(tt, ncol = 2, byrow = TRUE)
@@ -272,7 +275,7 @@ trapCatch[[1]] = rep(0,length=ntraps)
 
 for(t in 2:niter){
   if(t>2) currentZoI<- currentZoI * s
-  ko = updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], trapCoordinates=trapCoordinates, trapCatch=trapCatch[[t-1]], currentZoI = currentZoI,saturationThreshold=saturationThresholdStart,how_close=how_closeStart,dstep=dstepstart)
+  ko = updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], trapCoordinates=trapCoordinates, trapCatch=trapCatch[[t-1]], currentZoI = currentZoI,saturationThreshold=saturationThresholdStart,trapSaturation= trapSaturationStart, how_close=how_closeStart,dstep=dstepstart)
   coordinatesOverTime[[t]] <- ko[[1]]
   trapCatch[[t]] <- ko[[2]]
   if(plot){
@@ -290,12 +293,14 @@ outmove$T = rep(0:(niter-1), each=nrow(tt))
 outmove$I = rep(1:nrow(tt), times=niter)
 #traps
 outtraps = as.data.frame(do.call(rbind, trapCatch))
-outputs = list()
 outputs$traps = outtraps
 outputs$lobsters = outmove
 return(outputs)
-  })
-}
+  }
+outputs$traps = rep(0,times=ntrapsstart)
+outputs$lobsters = data.frame(EASTING=0,NORTHING=0,trapped=0,T=0,I=0)
+return(outputs)
+})}
 
 
 #Lets run Multiple iterations
@@ -382,3 +387,61 @@ time.to.max8 = do.call(rbind,time.to.max8)
 max.catch8 = do.call(rbind,max.catch8)
 
 
+#What impact does saturation have on mean catch and dispersion index
+
+#base
+p = list()
+p$nrowgrids = 10
+p$ncolgrids = 10
+p$ngrids=p$nrowgrids * p$ncolgrids
+p$initlambda=.1
+p$initD = 3
+p$smult = 0.993
+p$currentZoIInit = 1
+
+p$trapEastStart = c(5,4,3)
+p$trapNorthStart = c(5,4,3)
+p$ntrapsstart = length(p$trapEastStart)
+
+p$saturationThresholdStart = 5
+p$how_closeStart = 1
+p$dstepstart = 5 
+p$trapSaturationStart = T
+p$niter =100
+
+
+# Densities
+lambda = c(.06,.1,.2,.5,1,1.6)
+
+
+realizations = 10
+dispersionSaturation = c()
+dispersionNoSaturation = c()
+for(j in 1:length(lambda)){
+  print(lambda[j])
+  max.catchSat = list()
+  max.catchnoSat = list()
+  p$initlambda = lambda[j]
+            for(i in 1:realizations){
+                print(paste(j,i,sep='-'))
+                p$trapSaturationStart = T
+                a = SimulateLobsterMovement(p=p)
+                if(any(a$traps>0))max.catchSat[[i]] = apply(a$traps,2,max)
+                p$trapSaturationStart = F
+                b = SimulateLobsterMovement(p=p)
+                if(any(b$lobster>0))max.catchnoSat[[i]] = apply(b$traps,2,max)
+            }
+      max.catchSat = do.call(rbind,max.catchSat)
+      max.catchnoSat = do.call(rbind,max.catchnoSat)
+     if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
+     if(p$ntrapsstart>11) dispSat = apply(max.catchSat,1,dispersion)
+     dispersionSaturation = c(dispersionSaturation,mean(dispSat)  )
+ 
+     if(p$ntrapsstart==1) dispnoSat = apply(max.catchnoSat,2,dispersion)
+     if(p$ntrapsstart>1) dispnoSat = apply(max.catchnoSat,1,dispersion)
+     dispersionNoSaturation = c(dispersionNoSaturation,mean(dispnoSat)  )
+      }
+#calculating dispersion
+    
+plot(lambda,dispersionSaturation,ylim=c(0,26),type = 'b')
+lines(lambda,dispersionNoSaturation,ylim=c(0,4),type = 'b',col='red')
