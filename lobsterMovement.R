@@ -1,5 +1,4 @@
-#updated Dec 2, 2020
-library(raster)
+#updated Dec 18, 2020
 library(ggplot2)
 library(reshape2)
 library(geosphere)
@@ -396,7 +395,7 @@ p$ncolgrids = 10
 p$ngrids=p$nrowgrids * p$ncolgrids
 p$initlambda=.1
 p$initD = 3
-p$smult = 0.993
+p$smult = c(0.95, 0.96, 0.97, 0.975, 0.985, 0.995, 1) #varying shrinkage factor
 p$currentZoIInit = 1
 
 p$trapEastStart = c(5,4,3)
@@ -417,31 +416,48 @@ lambda = c(.06,.1,.2,.5,1,1.6)
 realizations = 10
 dispersionSaturation = c()
 dispersionNoSaturation = c()
+meanCatchWithSat = c()
+meanCatchNoSat = c()
+
 for(j in 1:length(lambda)){
-  print(lambda[j])
-  max.catchSat = list()
-  max.catchnoSat = list()
-  p$initlambda = lambda[j]
-            for(i in 1:realizations){
-                print(paste(j,i,sep='-'))
-                p$trapSaturationStart = T
-                a = SimulateLobsterMovement(p=p)
-                if(any(a$traps>0))max.catchSat[[i]] = apply(a$traps,2,max)
-                p$trapSaturationStart = F
-                b = SimulateLobsterMovement(p=p)
-                if(any(b$lobster>0))max.catchnoSat[[i]] = apply(b$traps,2,max)
-            }
-      max.catchSat = do.call(rbind,max.catchSat)
-      max.catchnoSat = do.call(rbind,max.catchnoSat)
-     if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
-     if(p$ntrapsstart>11) dispSat = apply(max.catchSat,1,dispersion)
-     dispersionSaturation = c(dispersionSaturation,mean(dispSat)  )
- 
-     if(p$ntrapsstart==1) dispnoSat = apply(max.catchnoSat,2,dispersion)
-     if(p$ntrapsstart>1) dispnoSat = apply(max.catchnoSat,1,dispersion)
-     dispersionNoSaturation = c(dispersionNoSaturation,mean(dispnoSat)  )
-      }
-#calculating dispersion
+  for (m in 1:length(p$smult)) {
+    print(lambda[j])
+    print(p$smult[m])
+    max.catchSat = list()
+    max.catchnoSat = list()
+    p$initlambda = lambda[j]
+    for(i in 1:realizations){
+      print(paste(j,i,sep='-'))
+      p$trapSaturationStart = T
+      a = SimulateLobsterMovement(p=p)
+      if(any(a$traps>0)) max.catchSat[[i]] = apply(a$traps,2,max)
+      p$trapSaturationStart = F
+      b = SimulateLobsterMovement(p=p)
+      if(any(b$lobster>0))max.catchnoSat[[i]] = apply(b$traps,2,max)
+    }
+    max.catchSat = do.call(rbind,max.catchSat)
+    max.catchnoSat = do.call(rbind,max.catchnoSat)
+    
+    if(p$ntrapsstart==1) meanSat = apply(max.catchSat,2,mean)
+    if(p$ntrapsstart>1) meanSat = apply(max.catchSat,1,mean)
+    meanCatchWithSat = c(meanCatchWithSat,mean(meanSat)  )
+    
+    if(p$ntrapsstart==1) meanNoSat = apply(max.catchnoSat,2,mean)
+    if(p$ntrapsstart>1) meanNoSat = apply(max.catchnoSat,1,mean)
+    meanCatchNoSat = c(meanCatchNoSat,mean(meanNoSat)  )
+    
+    if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
+    if(p$ntrapsstart>1) dispSat = apply(max.catchSat,1,dispersion)
+    dispersionSaturation = c(dispersionSaturation,mean(na.omit(dispSat))  )
+    
+    if(p$ntrapsstart==1) dispnoSat = apply(max.catchnoSat,2,dispersion)
+    if(p$ntrapsstart>1) dispnoSat = apply(max.catchnoSat,1,dispersion)
+    dispersionNoSaturation = c(dispersionNoSaturation, mean(na.omit(dispnoSat))  )
+  }
+}
+
+
+#calculating dispersion & mean
     
 plot(lambda,dispersionSaturation,ylim=c(0,26),type = 'b')
 lines(lambda,dispersionNoSaturation,ylim=c(0,4),type = 'b',col='red')
