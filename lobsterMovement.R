@@ -148,7 +148,8 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
       temp <- directionalMove(xLobster = xOld , yLobster = yOld , distanceToTrap = distanceToTrap[1], radius_of_influence = radius_of_influence, dStep = dstep, ZoI = currentZoI)
       xNew[lobsterIndex] <- temp$EASTING
       yNew[lobsterIndex] <- temp$NORTHING
-    
+      }
+
       #AMC now need to check if trap is within path of lobster to be caught, i.e. does the lobster actually interact with the trap along its path from p1 to p2
       trappedQ = trapInPath(loc1 = c(xOld,yOld), loc2 = c(xNew,yNew), trap_loc = trapCoordinates[distanceToTrap[2],],how_close=how_close)
       if(trappedQ[3]==1) {
@@ -167,7 +168,6 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
             }
           } 
         }
-      }
 
   
   
@@ -395,7 +395,7 @@ p$ncolgrids = 10
 p$ngrids=p$nrowgrids * p$ncolgrids
 p$initlambda=.1
 p$initD = 3
-p$smult = c(0.95, 0.96, 0.97, 0.975, 0.985, 0.995, 1) #varying shrinkage factor
+p$smult = .97 #varying shrinkage factor
 p$currentZoIInit = 1
 
 p$trapEastStart = c(5,4,3)
@@ -461,3 +461,56 @@ for(j in 1:length(lambda)){
     
 plot(lambda,dispersionSaturation,ylim=c(0,26),type = 'b')
 lines(lambda,dispersionNoSaturation,ylim=c(0,4),type = 'b',col='red')
+
+###########################################################################################
+########just shrinkage factor
+
+p = list()
+p$nrowgrids = 10
+p$ncolgrids = 10
+p$ngrids=p$nrowgrids * p$ncolgrids
+p$initlambda=.1
+p$initD = 3
+p$smult = 0.993
+p$currentZoIInit = 1
+
+p$trapEastStart = c(5,2,7)
+p$trapNorthStart = c(5,2,7)
+p$ntrapsstart = length(p$trapEastStart)
+
+p$saturationThresholdStart = 5
+p$how_closeStart = .01
+p$dstepstart = 5 
+p$trapSaturationStart = T
+      
+p$niter =100
+
+
+realizations = 200
+dispersionSaturation = c()
+meanCatchWithSat = c()
+smult_start = seq(.9,1,by=.01)
+
+for(j in 1:length(smult_start)){
+    print(smult_start[j])
+    max.catchSat = list()
+    max.catchnoSat = list()
+    p$smult = smult_start[j]
+    for(i in 1:realizations){
+      a = SimulateLobsterMovement(p=p)
+      if(any(a$traps>0)) max.catchSat[[i]] = apply(a$traps,2,max)
+      }
+    max.catchSat = do.call(rbind,max.catchSat)
+    
+    if(p$ntrapsstart==1) meanSat = apply(max.catchSat,2,mean)
+    if(p$ntrapsstart>1) meanSat = apply(max.catchSat,1,mean)
+    meanCatchWithSat = c(meanCatchWithSat,mean(meanSat)  )
+    
+    if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
+    if(p$ntrapsstart>1) dispSat = apply(max.catchSat,1,dispersion)
+    dispersionSaturation = c(dispersionSaturation,mean(na.omit(dispSat))  )
+  }
+    
+plot(smult_start,dispersionSaturation,ylim=c(0,2),type = 'b')
+
+plot(smult_start,meanCatchWithSat,type = 'b')
