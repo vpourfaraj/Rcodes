@@ -37,8 +37,7 @@ randomMove<- function(xLobster, yLobster, dStep){
 directionalMove<- function(xLobster, yLobster, dStep, distanceToTrap,
                            xtrap=5, ytrap=5,radius_of_influence=15,ZoI){
 
-  thetaT = bearing(c(xLobster,yLobster),c(xtrap,ytrap))#calculates the angle to the trap
-  
+  thetaT = atan2(ytrap-yLobster,xtrap-xLobster)*180/pi
   # Calculating tethaR
     #ZoI is adjusted each time step for decay (shrinkage) of radius of influence (equation 3 in A)
     b = 1 + 0.9 * (distanceToTrap - ZoI) / radius_of_influence
@@ -124,7 +123,7 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
 
   # Loops over each lobster and update their coordinate accordingly
   for( lobsterIndex in 1:numberOfLobsters ){
-    
+    print(lobsterIndex)
     xOld <- lobsterCoordinates[lobsterIndex,1]
     yOld <- lobsterCoordinates[lobsterIndex,2]
     trapped <- lobsterCoordinates[lobsterIndex,3]
@@ -151,7 +150,7 @@ updateGrid    = function(lobsterCoordinates,trapCoordinates, trapCatch, radius_o
       }
 
       #AMC now need to check if trap is within path of lobster to be caught, i.e. does the lobster actually interact with the trap along its path from p1 to p2
-      trappedQ = trapInPath(loc1 = c(xOld,yOld), loc2 = c(xNew,yNew), trap_loc = trapCoordinates[distanceToTrap[2],],how_close=how_close)
+      trappedQ = trapInPath(loc1 = c(xOld,yOld), loc2 = c(xNew[lobsterIndex],yNew[lobsterIndex]), trap_loc = trapCoordinates[distanceToTrap[2],],how_close=how_close)
       if(trappedQ[3]==1) {
         
         #this means the lobster is close enough to be trapped and we need to apply the catchability criteria
@@ -254,7 +253,6 @@ outputs = list()
 
 initialGrid = rpoisD(n=ngrids,lambda=initlambda, D = initD)
 LobsterStart = data.frame(EASTING = rep(1:ncolgrids,times=nrowgrids), NORTHING = rep(1:nrowgrids,each=ncolgrids), Lobs = initialGrid)
-
 LobsterStart <- subset(LobsterStart,Lobs>0)
 if(nrow(LobsterStart)>0) {
 replicateCoordinates <- function(d){ rep(d[1:2], d[3]) } #replicates coordinates for grids with more than 1 lobster
@@ -277,6 +275,7 @@ for(t in 2:niter){
   ko = updateGrid( lobsterCoordinates = coordinatesOverTime[[t-1]], trapCoordinates=trapCoordinates, trapCatch=trapCatch[[t-1]], currentZoI = currentZoI,saturationThreshold=saturationThresholdStart,trapSaturation= trapSaturationStart, how_close=how_closeStart,dstep=dstepstart)
   coordinatesOverTime[[t]] <- ko[[1]]
   trapCatch[[t]] <- ko[[2]]
+  plot=FALSE
   if(plot){
   par( mfrow=c(1,2) ) # create a plot with 1 row and 2 columns to show plots side by side
   plot( coordinatesOverTime[[t-1]], xlim = c(0,10), ylim = c(0,10), main = paste0('Time = ', t-1) )
@@ -301,8 +300,10 @@ outputs$lobsters = data.frame(EASTING=0,NORTHING=0,trapped=0,T=0,I=0)
 return(outputs)
 })}
 
-
-#Lets run Multiple iterations
+#End Functions
+######################################################################################################################################################Lets run Multiple iterations
+######################################################################################################################################################Lets run Multiple iterations
+######################################################################################################################################################Lets run Multiple iterations
 
 #initalize a parameter file to pass info into the code and then put all into a function
 
@@ -382,6 +383,56 @@ for(i in 1:realizations){
         time.to.max8[[i]] = apply(a$traps,2, which.max)
         max.catch8[[i]] = apply(a$traps,2,max)
 }
+p = list()
+p$nrowgrids = 10
+p$ncolgrids = 10
+p$ngrids=p$nrowgrids * p$ncolgrids
+p$initlambda=.1
+p$initD = 3
+p$smult = 0.993
+p$currentZoIInit = 1
+
+p$trapEastStart = c(5,2,7)
+p$trapNorthStart = c(5,2,7)
+p$ntrapsstart = length(p$trapEastStart)
+
+p$saturationThresholdStart = 5
+p$how_closeStart = .01
+p$dstepstart = 5 
+p$trapSaturationStart = T
+      
+p$niter =100
+
+
+realizations = 200
+dispersionSaturation = c()
+meanCatchWithSat = c()
+smult_start = seq(.9,1,by=.01)
+
+for(j in 1:length(smult_start)){
+    print(smult_start[j])
+    max.catchSat = list()
+    max.catchnoSat = list()
+    p$smult = smult_start[j]
+    for(i in 1:realizations){
+      a = SimulateLobsterMovement(p=p)
+      if(any(a$traps>0)) max.catchSat[[i]] = apply(a$traps,2,max)
+      }
+    max.catchSat = do.call(rbind,max.catchSat)
+    
+    if(p$ntrapsstart==1) meanSat = apply(max.catchSat,2,mean)
+    if(p$ntrapsstart>1) meanSat = apply(max.catchSat,1,mean)
+    meanCatchWithSat = c(meanCatchWithSat,mean(meanSat)  )
+    
+    if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
+    if(p$ntrapsstart>1) dispSat = apply(max.catchSat,1,dispersion)
+    dispersionSaturation = c(dispersionSaturation,mean(na.omit(dispSat))  )
+  }
+    
+plot(smult_start,dispersionSaturation,ylim=c(0,2),type = 'b')
+
+plot(smult_start,meanCatchWithSat,type = 'b')
+
 time.to.max8 = do.call(rbind,time.to.max8)
 max.catch8 = do.call(rbind,max.catch8)
 
@@ -487,6 +538,69 @@ p$niter =100
 
 
 realizations = 200
+dispersionSaturation = c()
+meanCatchWithSat = c()
+smult_start = seq(.9,1,by=.01)
+
+for(j in 1:length(smult_start)){
+    print(smult_start[j])
+    max.catchSat = list()
+    max.catchnoSat = list()
+    p$smult = smult_start[j]
+    for(i in 1:realizations){
+      a = SimulateLobsterMovement(p=p)
+      if(any(a$traps>0)) max.catchSat[[i]] = apply(a$traps,2,max)
+      }
+    max.catchSat = do.call(rbind,max.catchSat)
+    
+    if(p$ntrapsstart==1) meanSat = apply(max.catchSat,2,mean)
+    if(p$ntrapsstart>1) meanSat = apply(max.catchSat,1,mean)
+    meanCatchWithSat = c(meanCatchWithSat,mean(meanSat)  )
+    
+    if(p$ntrapsstart==1) dispSat = apply(max.catchSat,2,dispersion)
+    if(p$ntrapsstart>1) dispSat = apply(max.catchSat,1,dispersion)
+    dispersionSaturation = c(dispersionSaturation,mean(na.omit(dispSat))  )
+  }
+    
+plot(smult_start,dispersionSaturation,ylim=c(0,2),type = 'b')
+
+plot(smult_start,meanCatchWithSat,type = 'b')
+
+#simulatepaper
+
+arena = matrix(0,200,200)
+y=x=seq(5,195,10)
+traps = expand.grid(x,y)
+plotit=F
+if(plot.arena){
+require(plot.matrix)
+  plot(arena)
+  points(traps)
+}
+
+
+p = list()
+p$nrowgrids = 200
+p$ncolgrids = 200
+p$ngrids=p$nrowgrids * p$ncolgrids
+p$initlambda=.1
+p$initD = 3
+p$smult = 0.993
+p$currentZoIInit = 1
+
+p$trapEastStart = traps[,1]
+p$trapNorthStart = traps[,2]
+p$ntrapsstart = length(p$trapEastStart)
+
+p$saturationThresholdStart = 5
+p$how_closeStart = .01
+p$dstepstart = 5 
+p$trapSaturationStart = T
+      
+p$niter =100
+
+
+realizations = 1
 dispersionSaturation = c()
 meanCatchWithSat = c()
 smult_start = seq(.9,1,by=.01)
