@@ -571,7 +571,7 @@ plot(smult_start,meanCatchWithSat,type = 'b')
 arena = matrix(0,200,200)
 y=x=seq(5,195,10)
 traps = expand.grid(x,y)
-plotit=F
+plot.arena=F
 if(plot.arena){
 require(plot.matrix)
   plot(arena)
